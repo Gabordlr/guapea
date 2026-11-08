@@ -1,0 +1,11 @@
+import { defineConfig } from '@neon/config/v1'
+
+export default defineConfig({
+  auth: true,
+  functions: {
+    api: {
+      name: 'Guapea API',
+      source: 'api/index.ts',
+    },
+  },
+})
