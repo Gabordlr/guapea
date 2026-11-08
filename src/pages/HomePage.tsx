@@ -1,77 +1,128 @@
-import { useEffect, useMemo, useState } from 'react'
-import { AttendanceLists } from '../components/AttendanceLists'
-import { AttendeeForm } from '../components/AttendeeForm'
-import { ConfirmDialog } from '../components/ConfirmDialog'
-import { SessionPicker } from '../components/SessionPicker'
+import { useEffect, useState } from "react";
+import { AttendanceLists } from "../components/AttendanceLists";
+import { AttendeeForm } from "../components/AttendeeForm";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { SalsaLoader } from "../components/loaders/SalsaLoader";
+import { SessionPicker } from "../components/SessionPicker";
 import {
   addAttendee,
   classesForDate,
   getAttendance,
   removeAttendee,
   todayISO,
-} from '../storage/repository'
-import type { Asistente, Genero } from '../types'
+} from "../storage/repository";
+import type { Asistente, Clase, Genero } from "../types";
 
 export function HomePage() {
-  const [fecha, setFecha] = useState(todayISO)
-  const [claseId, setClaseId] = useState<string | null>(null)
-  const [attendees, setAttendees] = useState<Asistente[]>([])
-  const [pendingRemove, setPendingRemove] = useState<Asistente | null>(null)
-  const [tick, setTick] = useState(0)
+  const [fecha, setFecha] = useState(todayISO);
+  const [claseId, setClaseId] = useState<string | null>(null);
+  const [classes, setClasses] = useState<Clase[]>([]);
+  const [attendees, setAttendees] = useState<Asistente[]>([]);
+  const [pendingRemove, setPendingRemove] = useState<Asistente | null>(null);
+  const [tick, setTick] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const classes = useMemo(() => classesForDate(fecha), [fecha, tick])
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    classesForDate(fecha)
+      .then((list) => {
+        if (cancelled) return;
+        setClasses(list);
+        setError(null);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setClasses([]);
+        setError(err.message || "No se pudieron cargar las clases");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fecha, tick]);
 
   useEffect(() => {
     if (classes.length === 0) {
-      setClaseId(null)
-      return
+      setClaseId(null);
+      return;
     }
     setClaseId((current) =>
-      current && classes.some((c) => c.id === current) ? current : classes[0].id,
-    )
-  }, [classes])
+      current && classes.some((c) => c.id === current)
+        ? current
+        : classes[0].id,
+    );
+  }, [classes]);
 
   useEffect(() => {
     if (!claseId) {
-      setAttendees([])
-      return
+      setAttendees([]);
+      return;
     }
-    setAttendees(getAttendance(fecha, claseId))
-  }, [fecha, claseId, tick])
+    let cancelled = false;
+    getAttendance(fecha, claseId)
+      .then((list) => {
+        if (!cancelled) setAttendees(list);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fecha, claseId, tick]);
 
   function refresh() {
-    setTick((t) => t + 1)
+    setTick((t) => t + 1);
   }
 
-  function handleAdd(data: { nombre: string; emoji: string; genero: Genero }) {
-    if (!claseId) return
-    addAttendee(fecha, claseId, data)
-    refresh()
+  async function handleAdd(data: {
+    nombre: string;
+    emoji: string;
+    genero: Genero;
+  }) {
+    if (!claseId) return;
+    try {
+      await addAttendee(fecha, claseId, data);
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo anotar");
+    }
   }
 
-  function confirmRemove() {
-    if (!claseId || !pendingRemove) return
-    removeAttendee(fecha, claseId, pendingRemove.id)
-    setPendingRemove(null)
-    refresh()
+  async function confirmRemove() {
+    if (!claseId || !pendingRemove) return;
+    try {
+      await removeAttendee(fecha, claseId, pendingRemove.id);
+      setPendingRemove(null);
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo eliminar");
+    }
   }
 
   return (
     <div className="stack">
-      <div>
-        <h1 className="page-title">¿Vas a la clase?</h1>
-        <p className="page-sub">Elige el día, anótate y listo. Sin WhatsApp.</p>
-      </div>
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       <SessionPicker
         fecha={fecha}
         onFechaChange={(f) => {
-          setFecha(f)
+          setFecha(f);
         }}
         classes={classes}
         claseId={claseId}
         onClaseChange={setClaseId}
       />
+
+      {loading ? <SalsaLoader kind="basic" size={120} /> : null}
 
       {claseId ? (
         <>
@@ -92,5 +143,5 @@ export function HomePage() {
         />
       ) : null}
     </div>
-  )
+  );
 }

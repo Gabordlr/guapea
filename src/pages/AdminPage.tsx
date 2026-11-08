@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { authClient } from "../auth/client";
+import { COBRO_FLUSH_INTERVAL_MS } from "../cobro/config";
 import { AttendeeForm } from "../components/AttendeeForm";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { SessionPicker } from "../components/SessionPicker";
@@ -7,16 +10,37 @@ import {
   classesForDate,
   deleteClass,
   getAttendance,
-  getClass,
-  getSessionMetrics,
   listClasses,
+  patchAttendeeCobro,
   removeAttendee,
   saveClass,
-  setPayment,
   todayISO,
 } from "../storage/repository";
-import type { Asistente, Clase, DiaSemana, Genero, MetodoPago } from "../types";
-import { DIAS, formatHorario, formatMoney } from "../utils/format";
+import type {
+  Asistente,
+  Clase,
+  DiaSemana,
+  Genero,
+  MetodoPago,
+  MetricasSesion,
+  Promo,
+} from "../types";
+import {
+  DIAS,
+  DURACIONES,
+  formatHorario,
+  formatMoney,
+  listHorasInicio,
+} from "../utils/format";
+import { PROMOS } from "../utils/pricing";
+import { computeSessionMetrics } from "../utils/sessionMetrics";
+
+const HORAS_INICIO = listHorasInicio(15);
+
+type CobroDirty = {
+  pago: MetodoPago | undefined;
+  promo: Promo | undefined;
+};
 
 type AdminTab = "cobro" | "clases";
 
@@ -30,11 +54,16 @@ const EMPTY_FORM = {
 };
 
 export function AdminPage() {
+  const navigate = useNavigate();
+  const session = authClient.useSession();
   const [tab, setTab] = useState<AdminTab>("cobro");
   const [tick, setTick] = useState(0);
   const [fecha, setFecha] = useState(todayISO);
   const [claseId, setClaseId] = useState<string | null>(null);
   const [attendees, setAttendees] = useState<Asistente[]>([]);
+  const [allClasses, setAllClasses] = useState<Clase[]>([]);
+  const [dayClasses, setDayClasses] = useState<Clase[]>([]);
+  const [metrics, setMetrics] = useState<MetricasSesion | null>(null);
   const [cobroSearch, setCobroSearch] = useState("");
   const [pendingRemove, setPendingRemove] = useState<Asistente | null>(null);
   const [pendingDeleteClass, setPendingDeleteClass] = useState<Clase | null>(
@@ -43,14 +72,19 @@ export function AdminPage() {
   const [editing, setEditing] = useState<Clase | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [flushError, setFlushError] = useState<string | null>(null);
 
-  const allClasses = useMemo(() => listClasses(), [tick]);
-  const dayClasses = useMemo(() => classesForDate(fecha), [fecha, tick]);
-  const metrics = useMemo(
-    () => (claseId ? getSessionMetrics(fecha, claseId) : null),
-    [fecha, claseId, tick],
-  );
-  const selectedClass = claseId ? getClass(claseId) : undefined;
+  const dirtyRef = useRef(new Map<string, CobroDirty>());
+  const flushTimerRef = useRef<number | null>(null);
+  const flushingRef = useRef(false);
+  const cobroSessionRef = useRef({ fecha, claseId });
+  cobroSessionRef.current = { fecha, claseId };
+  const precioRef = useRef(0);
+
+  const selectedClass = dayClasses.find((c) => c.id === claseId);
+  precioRef.current = selectedClass?.precio ?? 0;
+
   const filteredAttendees = useMemo(() => {
     const q = cobroSearch.trim().toLowerCase();
     if (!q) return attendees;
@@ -58,6 +92,87 @@ export function AdminPage() {
       `${a.emoji} ${a.nombre}`.toLowerCase().includes(q),
     );
   }, [attendees, cobroSearch]);
+
+  function syncMetrics(list: Asistente[], precio = precioRef.current) {
+    setMetrics(computeSessionMetrics(list, precio));
+  }
+
+  async function flushDirtyCobro(forceSession?: {
+    fecha: string;
+    claseId: string | null;
+  }) {
+    const { fecha: f, claseId: cId } = forceSession ?? cobroSessionRef.current;
+    if (!cId || flushingRef.current) return;
+    if (flushTimerRef.current != null) {
+      window.clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    const entries = [...dirtyRef.current.entries()];
+    if (entries.length === 0) return;
+
+    flushingRef.current = true;
+    dirtyRef.current.clear();
+    try {
+      await Promise.all(
+        entries.map(([attendeeId, patch]) =>
+          patchAttendeeCobro(f, cId, attendeeId, {
+            pago: patch.pago ?? null,
+            promo: patch.promo ?? null,
+          }),
+        ),
+      );
+      setFlushError(null);
+    } catch (err) {
+      for (const [id, patch] of entries) {
+        if (!dirtyRef.current.has(id)) dirtyRef.current.set(id, patch);
+      }
+      setFlushError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo guardar el cobro; reintentando…",
+      );
+      scheduleCobroFlush();
+    } finally {
+      flushingRef.current = false;
+    }
+  }
+
+  function scheduleCobroFlush() {
+    if (flushTimerRef.current != null) return;
+    if (dirtyRef.current.size === 0) return;
+    flushTimerRef.current = window.setTimeout(() => {
+      flushTimerRef.current = null;
+      void flushDirtyCobro();
+    }, COBRO_FLUSH_INTERVAL_MS);
+  }
+
+  function markCobroDirty(attendeeId: string, next: Asistente) {
+    dirtyRef.current.set(attendeeId, {
+      pago: next.pago,
+      promo: next.promo,
+    });
+    scheduleCobroFlush();
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([listClasses(), classesForDate(fecha)])
+      .then(([all, day]) => {
+        if (cancelled) return;
+        setAllClasses(all);
+        setDayClasses(day);
+        setLoadError(null);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setAllClasses([]);
+        setDayClasses([]);
+        setLoadError(err.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fecha, tick]);
 
   useEffect(() => {
     if (dayClasses.length === 0) {
@@ -74,10 +189,56 @@ export function AdminPage() {
   useEffect(() => {
     if (!claseId) {
       setAttendees([]);
+      setMetrics(null);
       return;
     }
-    setAttendees(getAttendance(fecha, claseId));
+    let cancelled = false;
+    getAttendance(fecha, claseId)
+      .then((list) => {
+        if (cancelled) return;
+        // Don't clobber optimistic edits waiting to flush.
+        if (dirtyRef.current.size > 0) return;
+        setAttendees(list);
+        setMetrics(computeSessionMetrics(list, precioRef.current));
+        setLoadError(null);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setLoadError(err.message);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [fecha, claseId, tick]);
+
+  // Hard-flush dirty cobro when leaving this day/class session.
+  useEffect(() => {
+    const session = { fecha, claseId };
+    return () => {
+      void flushDirtyCobro(session);
+    };
+  }, [fecha, claseId]);
+
+  // Hard-flush when leaving Cobro tab or unmounting / hiding the page.
+  useEffect(() => {
+    if (tab !== "cobro") {
+      void flushDirtyCobro();
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    function onHide() {
+      if (document.visibilityState === "hidden") {
+        void flushDirtyCobro();
+      }
+    }
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", onHide);
+      void flushDirtyCobro();
+    };
+  }, []);
 
   useEffect(() => {
     setCobroSearch("");
@@ -113,7 +274,7 @@ export function AdminPage() {
     return trimmed;
   }
 
-  function handleSaveClass(e?: React.FormEvent) {
+  async function handleSaveClass(e?: React.FormEvent) {
     e?.preventDefault();
     const nombre = form.nombre.trim();
     const horaInicio = normalizeTime(form.horaInicio);
@@ -137,57 +298,126 @@ export function AdminPage() {
       return;
     }
 
-    saveClass({
-      id: editing?.id,
-      nombre,
-      descripcion: form.descripcion.trim(),
-      diaDeLaSemana: form.diaDeLaSemana,
-      horaInicio,
-      duracionMinutos: Math.max(15, duracionMinutos),
-      precio,
-    });
-    setFormError(null);
-    startCreate();
-    refresh();
+    try {
+      await saveClass({
+        id: editing?.id,
+        nombre,
+        descripcion: form.descripcion.trim(),
+        diaDeLaSemana: form.diaDeLaSemana,
+        horaInicio,
+        duracionMinutos: Math.max(15, duracionMinutos),
+        precio,
+      });
+      setFormError(null);
+      startCreate();
+      refresh();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "No se pudo guardar");
+    }
   }
 
-  function confirmDeleteClass() {
+  async function confirmDeleteClass() {
     if (!pendingDeleteClass) return;
-    deleteClass(pendingDeleteClass.id);
-    setPendingDeleteClass(null);
-    if (editing?.id === pendingDeleteClass.id) startCreate();
-    refresh();
+    try {
+      await deleteClass(pendingDeleteClass.id);
+      setPendingDeleteClass(null);
+      if (editing?.id === pendingDeleteClass.id) startCreate();
+      refresh();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "No se pudo borrar");
+    }
   }
 
-  function handleAdd(data: { nombre: string; emoji: string; genero: Genero }) {
+  async function handleAdd(data: {
+    nombre: string;
+    emoji: string;
+    genero: Genero;
+  }) {
     if (!claseId) return;
-    addAttendee(fecha, claseId, data);
-    refresh();
+    try {
+      await addAttendee(fecha, claseId, data);
+      refresh();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "No se pudo anotar");
+    }
   }
 
   function handlePayment(attendeeId: string, pago: MetodoPago) {
     if (!claseId) return;
     const current = attendees.find((a) => a.id === attendeeId);
-    const next = current?.pago === pago ? undefined : pago;
-    setPayment(fecha, claseId, attendeeId, next);
-    refresh();
+    if (!current) return;
+    const nextPago = current.pago === pago ? undefined : pago;
+    const nextList = attendees.map((a) =>
+      a.id === attendeeId ? { ...a, pago: nextPago } : a,
+    );
+    setAttendees(nextList);
+    syncMetrics(nextList);
+    markCobroDirty(attendeeId, { ...current, pago: nextPago });
   }
 
-  function confirmRemove() {
+  function handlePromo(attendeeId: string, promo: Promo) {
+    if (!claseId) return;
+    const current = attendees.find((a) => a.id === attendeeId);
+    if (!current) return;
+    const nextPromo = current.promo === promo ? undefined : promo;
+    const nextList = attendees.map((a) =>
+      a.id === attendeeId ? { ...a, promo: nextPromo } : a,
+    );
+    setAttendees(nextList);
+    syncMetrics(nextList);
+    markCobroDirty(attendeeId, { ...current, promo: nextPromo });
+  }
+
+  async function confirmRemove() {
     if (!claseId || !pendingRemove) return;
-    removeAttendee(fecha, claseId, pendingRemove.id);
-    setPendingRemove(null);
-    refresh();
+    try {
+      await removeAttendee(fecha, claseId, pendingRemove.id);
+      setPendingRemove(null);
+      refresh();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "No se pudo eliminar");
+    }
+  }
+
+  async function handleSignOut() {
+    await authClient.signOut();
+    navigate("/login", { replace: true });
   }
 
   return (
     <div className="stack">
-      <div>
-        <h1 className="page-title">Admin</h1>
-        <p className="page-sub">
-          Clases semanales y cobro al final de la sesión.
-        </p>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: "1rem",
+        }}
+      >
+        <div>
+          <h1 className="page-title">Admin</h1>
+          <p className="page-sub">
+            Clases semanales y cobro al final de la sesión.
+            {session.data?.user?.name || session.data?.user?.email
+              ? ` · ${session.data.user.name || session.data.user.email}`
+              : null}
+          </p>
+        </div>
+        <button type="button" className="btn btn-ghost" onClick={handleSignOut}>
+          Salir
+        </button>
       </div>
+
+      {loadError ? (
+        <p className="form-error" role="alert">
+          {loadError}
+        </p>
+      ) : null}
+      {flushError ? (
+        <p className="form-error" role="alert">
+          No se pudo guardar el cobro; reintentando… ({flushError})
+        </p>
+      ) : null}
 
       <div className="tabs">
         <button
@@ -218,44 +448,6 @@ export function AdminPage() {
 
           {claseId && metrics && selectedClass ? (
             <>
-              <div className="panel">
-                <h2>Métricas</h2>
-                <div className="metrics">
-                  <div className="metric">
-                    <div className="k">Personas</div>
-                    <div className="v">{metrics.total}</div>
-                  </div>
-                  <div className="metric">
-                    <div className="k">H / M</div>
-                    <div className="v">
-                      {metrics.hombres}/{metrics.mujeres}
-                    </div>
-                  </div>
-                  <div className="metric">
-                    <div className="k">Efectivo</div>
-                    <div className="v">{metrics.efectivo}</div>
-                  </div>
-                  <div className="metric">
-                    <div className="k">Transferencia</div>
-                    <div className="v">{metrics.transferencia}</div>
-                  </div>
-                  <div className="metric">
-                    <div className="k">Suscripción</div>
-                    <div className="v">{metrics.suscripcion}</div>
-                  </div>
-                  <div className="metric">
-                    <div className="k">Sin pagar</div>
-                    <div className="v">{metrics.sinPagar}</div>
-                  </div>
-                  <div className="metric wide">
-                    <div className="k">Efectivo esperado</div>
-                    <div className="v">
-                      {formatMoney(metrics.efectivoEsperado)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               <div className="panel">
                 <h2>Cobrar — {selectedClass.nombre}</h2>
                 {attendees.length === 0 ? (
@@ -310,18 +502,31 @@ export function AdminPage() {
                               Quitar
                             </button>
                           </div>
+                          <div className="promo-seg">
+                            {PROMOS.map((promo) => (
+                              <button
+                                key={promo.id}
+                                type="button"
+                                className={`promo-btn ${a.promo === promo.id ? "active" : ""}`}
+                                onClick={() => handlePromo(a.id, promo.id)}
+                              >
+                                {promo.label} · {formatMoney(promo.precio)}
+                              </button>
+                            ))}
+                          </div>
                           <div className="pay-seg">
                             {(
                               [
                                 ["efectivo", "Efectivo"],
                                 ["transferencia", "Transfer"],
                                 ["suscripcion", "Vale"],
+                                ["sin_pago", "Sin pago"],
                               ] as const
                             ).map(([value, label]) => (
                               <button
                                 key={value}
                                 type="button"
-                                className={`pay-btn ${a.pago === value ? "active" : ""}`}
+                                className={`pay-btn ${value === "sin_pago" ? "muted" : ""} ${a.pago === value ? "active" : ""}`}
                                 onClick={() => handlePayment(a.id, value)}
                               >
                                 {label}
@@ -334,7 +539,50 @@ export function AdminPage() {
                   </>
                 )}
               </div>
-
+              <div className="panel">
+                <h2>Métricas</h2>
+                <div className="metrics">
+                  <div className="metric">
+                    <div className="k">Personas</div>
+                    <div className="v">
+                      {metrics.total}
+                      <span className="metric-sub">
+                        {" "}
+                        · {metrics.hombres}H / {metrics.mujeres}M
+                      </span>
+                    </div>
+                  </div>
+                  <div className="metric">
+                    <div className="k">Promo pareja</div>
+                    <div className="v">{metrics.promoPareja}</div>
+                  </div>
+                  <div className="metric">
+                    <div className="k">Efectivo</div>
+                    <div className="v">
+                      {formatMoney(metrics.efectivoEsperado)}
+                      <span className="metric-sub"> · {metrics.efectivo}</span>
+                    </div>
+                  </div>
+                  <div className="metric">
+                    <div className="k">Transferencia</div>
+                    <div className="v">
+                      {formatMoney(metrics.transferenciaMonto)}
+                      <span className="metric-sub">
+                        {" "}
+                        · {metrics.transferencia}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="metric">
+                    <div className="k">Vale</div>
+                    <div className="v">{metrics.suscripcion}</div>
+                  </div>
+                  <div className="metric">
+                    <div className="k">Sin pago</div>
+                    <div className="v">{metrics.sinPagar}</div>
+                  </div>
+                </div>
+              </div>
               <AttendeeForm
                 onSubmit={handleAdd}
                 title="Agregar persona"
@@ -405,28 +653,32 @@ export function AdminPage() {
                 <label className="label" htmlFor="c-hora">
                   Empieza
                 </label>
-                <input
+                <select
                   id="c-hora"
-                  className="input"
-                  type="time"
+                  className="select"
                   value={form.horaInicio}
                   onChange={(e) => {
                     setForm({ ...form, horaInicio: e.target.value });
                     setFormError(null);
                   }}
-                />
+                >
+                  {!HORAS_INICIO.includes(form.horaInicio) && form.horaInicio ? (
+                    <option value={form.horaInicio}>{form.horaInicio}</option>
+                  ) : null}
+                  {HORAS_INICIO.map((hora) => (
+                    <option key={hora} value={hora}>
+                      {hora}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="field">
                 <label className="label" htmlFor="c-duracion">
-                  Duración (min)
+                  Duración
                 </label>
-                <input
+                <select
                   id="c-duracion"
-                  className="input"
-                  type="number"
-                  inputMode="numeric"
-                  min={15}
-                  step={15}
+                  className="select"
                   value={form.duracionMinutos}
                   onChange={(e) => {
                     setForm({
@@ -435,7 +687,20 @@ export function AdminPage() {
                     });
                     setFormError(null);
                   }}
-                />
+                >
+                  {!(DURACIONES as readonly number[]).includes(
+                    form.duracionMinutos,
+                  ) ? (
+                    <option value={form.duracionMinutos}>
+                      {form.duracionMinutos} min
+                    </option>
+                  ) : null}
+                  {DURACIONES.map((mins) => (
+                    <option key={mins} value={mins}>
+                      {mins} min
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             {form.horaInicio ? (
@@ -450,13 +715,16 @@ export function AdminPage() {
               <input
                 id="c-precio"
                 className="input"
-                type="number"
+                type="text"
                 inputMode="numeric"
-                min={0}
-                step={1}
+                pattern="[0-9]*"
                 value={form.precio}
                 onChange={(e) => {
-                  setForm({ ...form, precio: Number(e.target.value) });
+                  const raw = e.target.value.replace(/\D/g, "");
+                  setForm({
+                    ...form,
+                    precio: raw === "" ? 0 : Number(raw),
+                  });
                   setFormError(null);
                 }}
               />

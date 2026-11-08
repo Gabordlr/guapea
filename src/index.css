@@ -127,19 +127,10 @@ input[type='time'] {
 }
 
 .brand {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: clamp(1.4rem, 6vw, 1.75rem);
-  letter-spacing: -0.03em;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
   min-width: 0;
-}
-
-.brand span {
-  background: linear-gradient(120deg, var(--accent), var(--accent-hot) 55%, var(--gold));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  line-height: 1;
 }
 
 .nav-link {
@@ -296,11 +287,40 @@ input[type='time'] {
   background: var(--surface);
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
+  color-scheme: dark;
+}
+
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 2.75rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%23c9a99a' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.9rem center;
+  background-size: 1rem;
+  cursor: pointer;
+}
+
+.select option {
+  background: var(--bg-elevated);
+  color: var(--text);
 }
 
 .textarea {
   min-height: 88px;
   resize: vertical;
+}
+
+/* Hide native number steppers — they clash with the dark theme */
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .input:focus,
@@ -597,6 +617,13 @@ input[type='time'] {
   line-height: 1.15;
 }
 
+.metric-sub {
+  font-family: var(--font-body);
+  font-size: 0.72em;
+  font-weight: 700;
+  color: var(--muted);
+}
+
 .tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -658,9 +685,34 @@ input[type='time'] {
   flex-shrink: 0;
 }
 
+.promo-seg {
+  display: flex;
+  min-width: 0;
+}
+
+.promo-btn {
+  min-height: 38px;
+  width: 100%;
+  min-width: 0;
+  border-radius: 10px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.35rem 0.7rem;
+}
+
+.promo-btn.active {
+  border-style: solid;
+  background: rgba(240, 199, 94, 0.16);
+  border-color: rgba(240, 199, 94, 0.55);
+  color: var(--gold);
+}
+
 .pay-seg {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.35rem;
   min-width: 0;
 }
@@ -672,9 +724,9 @@ input[type='time'] {
   border-radius: 10px;
   border: 1px solid var(--border);
   background: transparent;
-  font-size: clamp(0.68rem, 2.8vw, 0.78rem);
+  font-size: clamp(0.62rem, 2.5vw, 0.75rem);
   font-weight: 700;
-  padding: 0.35rem 0.2rem;
+  padding: 0.35rem 0.15rem;
   line-height: 1.15;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -684,6 +736,12 @@ input[type='time'] {
   background: rgba(95, 211, 154, 0.18);
   border-color: rgba(95, 211, 154, 0.55);
   color: var(--ok);
+}
+
+.pay-btn.muted.active {
+  background: rgba(201, 169, 154, 0.16);
+  border-color: rgba(201, 169, 154, 0.5);
+  color: var(--muted);
 }
 
 .modal-backdrop {
@@ -905,3 +963,159 @@ input[type='time'] {
     place-items: center;
   }
 }
+
+/* ============================================================
+   Salsa loaders (see src/components/loaders). Step keyframes are
+   injected by guapeaLoaders.ts; this is just layout.
+   ============================================================ */
+/* ---------- Logo system (sizes live in ClaveLogo / Lockups) ---------- */
+.logo-wordmark {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  background: linear-gradient(90deg, #ef5f6b, #f0a35a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.logo-clave {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: max-content;
+}
+
+.logo-clave--icon {
+  align-items: center;
+}
+
+.logo-beats {
+  display: flex;
+  justify-content: space-between;
+}
+
+.logo-beats--icon {
+  gap: 5px;
+  justify-content: center;
+}
+
+.logo-beat {
+  flex: 0 0 auto;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.logo-beat--hollow {
+  background: transparent;
+  border-style: solid;
+}
+
+.logo-lockup {
+  display: flex;
+  align-items: center;
+}
+
+.logo-app-icon {
+  width: 72px;
+  height: 72px;
+  box-sizing: border-box;
+  border-radius: 18px;
+  background: #281e25;
+  border: 1px solid #4b3b43;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo-app-icon--clave {
+  flex-direction: column;
+  gap: 5px;
+}
+
+.logo-board {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem 1rem 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #1c1317;
+}
+
+.logo-board-title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.logo-board-stage {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0 0.25rem;
+  overflow-x: auto;
+}
+
+.logo-board-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.salsa-loader {
+  display: grid;
+  justify-items: center;
+  padding: 1.5rem 0;
+}
+
+.salsa-steps,
+.salsa-rueda {
+  display: grid;
+  justify-items: center;
+}
+
+.salsa-rueda {
+  gap: 0.5rem;
+}
+
+.salsa-rueda svg {
+  display: block;
+}
+
+.loaders-grid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.loader-card {
+  margin: 0;
+  padding: 1.25rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+}
+
+.loader-card figcaption {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.loaders-page code {
+  font-size: 0.85em;
+  color: var(--gold);
+}
+
+@media (min-width: 560px) {
+  .loaders-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
