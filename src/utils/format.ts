@@ -51,6 +51,20 @@ export function addMinutesToTime(hora: string, minutes: number): string {
   return `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`
 }
 
+/** Class start times, every 15 minutes. */
+export function listHorasInicio(stepMinutes = 15): string[] {
+  const out: string[] = []
+  for (let mins = 0; mins < 24 * 60; mins += stepMinutes) {
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    out.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+  }
+  return out
+}
+
+/** Common class lengths. */
+export const DURACIONES = [30, 45, 60, 75, 90, 120] as const
+
 export function horaFin(clase: Pick<Clase, 'horaInicio' | 'duracionMinutos'>): string {
   return addMinutesToTime(clase.horaInicio, clase.duracionMinutos)
 }

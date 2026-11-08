@@ -2,7 +2,14 @@ export type DiaSemana = 0 | 1 | 2 | 3 | 4 | 5 | 6 // Domingo = 0
 
 export type Genero = 'hombre' | 'mujer'
 
-export type MetodoPago = 'efectivo' | 'transferencia' | 'suscripcion'
+export type MetodoPago =
+  | 'efectivo'
+  | 'transferencia'
+  | 'suscripcion'
+  | 'sin_pago'
+
+/** Price override. Not a payment method — pago is still required. */
+export type Promo = 'pareja'
 
 export interface Clase {
   id: string
@@ -20,6 +27,7 @@ export interface Asistente {
   emoji: string
   genero: Genero
   pago?: MetodoPago
+  promo?: Promo
   createdAt: string
 }
 
@@ -38,5 +46,9 @@ export interface MetricasSesion {
   transferencia: number
   suscripcion: number
   sinPagar: number
+  promoPareja: number
+  /** Cash already marked as paid, using each person's promo price when set. */
   efectivoEsperado: number
+  /** Transfers already marked as paid, using each person's promo price when set. */
+  transferenciaMonto: number
 }

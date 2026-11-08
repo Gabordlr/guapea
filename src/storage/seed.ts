@@ -8,7 +8,7 @@ const KEYS = {
   seeded: 'guapea:demo-seeded',
 } as const
 
-const SEED_VERSION = 'demo-wed-v1'
+const SEED_VERSION = 'demo-wed-v2'
 
 function attendanceKey(fecha: string, claseId: string) {
   return `guapea:attendance:${fecha}:${claseId}`
@@ -114,17 +114,9 @@ export function seedDemoData(force = false) {
     )
   }
 
-  localStorage.setItem(
-    KEYS.remembered,
-    JSON.stringify(
-      [...intermedio, ...avanzados].map((a) => ({
-        nombre: a.nombre,
-        emoji: a.emoji,
-        genero: a.genero,
-        lastUsedAt: a.createdAt,
-      })),
-    ),
-  )
+  // Remembered names stay browser-local and only grow from real check-ins
+  // on this device — do not seed the full demo roster into autocomplete.
+  localStorage.removeItem(KEYS.remembered)
 
   localStorage.setItem(KEYS.seeded, SEED_VERSION)
 }
