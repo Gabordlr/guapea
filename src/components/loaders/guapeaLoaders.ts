@@ -378,13 +378,15 @@ export function rueda(container: Element, opts: RuedaOptions = {}): () => void {
     }
   }
 
+  // Begin on dame (partner switch), not the in-place guapea sway.
+  const startAt = tb
+
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    // static first frame
-    frame(0)
+    frame(startAt)
   } else {
     const loop = (now: number) => {
       if (stopped) return
-      if (!t0) t0 = now
+      if (!t0) t0 = now - startAt
       frame(now - t0)
       raf = requestAnimationFrame(loop)
     }

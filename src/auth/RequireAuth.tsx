@@ -9,9 +9,9 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   if (session.isPending) {
     return (
-      <main className="page">
+      <div className="salsa-loader-screen">
         <SalsaLoader />
-      </main>
+      </div>
     )
   }
 

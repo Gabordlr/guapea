@@ -38,9 +38,9 @@ export function LoginPage() {
 
   if (session.isPending || postLogin) {
     return (
-      <main className="page">
+      <div className="salsa-loader-screen">
         <SalsaLoader />
-      </main>
+      </div>
     );
   }
 

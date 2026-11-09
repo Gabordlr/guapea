@@ -1,5 +1,7 @@
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { cors } from 'hono/cors'
+import { HTTPException } from 'hono/http-exception'
 import { requireAdmin } from './auth'
 import { pool } from './db'
 import {
@@ -24,6 +26,14 @@ app.use(
 )
 
 app.get('/', (c) => c.json({ ok: true, service: 'guapea-api' }))
+
+function param(c: Context, name: string): string {
+  const value = c.req.param(name)
+  if (!value) {
+    throw new HTTPException(400, { message: `Missing path param: ${name}` })
+  }
+  return value
+}
 
 async function ensureSession(classId: string, fecha: string) {
   const existing = await pool.query<{ id: string }>(
@@ -60,7 +70,7 @@ app.get('/classes', async (c) => {
 
 /** Public: classes scheduled for a calendar date */
 app.get('/classes/for-date/:fecha', async (c) => {
-  const fecha = c.req.param('fecha')
+  const fecha = param(c, 'fecha')
   const day = new Date(`${fecha}T12:00:00`).getDay()
   const result = await pool.query<ClassRow>(
     `SELECT id, nombre, descripcion, dia_de_la_semana, hora_inicio,
@@ -78,7 +88,7 @@ app.get('/classes/:id', async (c) => {
     `SELECT id, nombre, descripcion, dia_de_la_semana, hora_inicio,
             duracion_minutos, precio
      FROM classes WHERE id = $1`,
-    [c.req.param('id')],
+    [param(c, 'id')],
   )
   const row = result.rows[0]
   if (!row) return c.json({ error: 'Not found' }, 404)
@@ -113,7 +123,7 @@ app.post('/classes', requireAdmin, async (c) => {
 })
 
 app.put('/classes/:id', requireAdmin, async (c) => {
-  const id = c.req.param('id')
+  const id = param(c, 'id')
   const body = await c.req.json<{
     nombre: string
     descripcion?: string
@@ -149,14 +159,14 @@ app.put('/classes/:id', requireAdmin, async (c) => {
 })
 
 app.delete('/classes/:id', requireAdmin, async (c) => {
-  await pool.query(`DELETE FROM classes WHERE id = $1`, [c.req.param('id')])
+  await pool.query(`DELETE FROM classes WHERE id = $1`, [param(c, 'id')])
   return c.json({ ok: true })
 })
 
 /** Public: lazy-create session + list attendance */
 app.get('/sessions/:fecha/:classId/attendance', async (c) => {
-  const fecha = c.req.param('fecha')
-  const classId = c.req.param('classId')
+  const fecha = param(c, 'fecha')
+  const classId = param(c, 'classId')
   const sessionId = await ensureSession(classId, fecha)
   const result = await pool.query<AttendanceRow>(
     `SELECT id, nombre, genero, pago, promo, created_at
@@ -173,8 +183,8 @@ app.get('/sessions/:fecha/:classId/attendance', async (c) => {
 
 /** Public: check in */
 app.post('/sessions/:fecha/:classId/attendance', async (c) => {
-  const fecha = c.req.param('fecha')
-  const classId = c.req.param('classId')
+  const fecha = param(c, 'fecha')
+  const classId = param(c, 'classId')
   const body = await c.req.json<{
     nombre: string
     emoji?: string
@@ -200,9 +210,9 @@ app.post('/sessions/:fecha/:classId/attendance', async (c) => {
 app.delete(
   '/sessions/:fecha/:classId/attendance/:attendeeId',
   async (c) => {
-    const fecha = c.req.param('fecha')
-    const classId = c.req.param('classId')
-    const attendeeId = c.req.param('attendeeId')
+    const fecha = param(c, 'fecha')
+    const classId = param(c, 'classId')
+    const attendeeId = param(c, 'attendeeId')
     const sessionId = await ensureSession(classId, fecha)
     await pool.query(
       `DELETE FROM attendance WHERE id = $1 AND session_id = $2`,
@@ -216,9 +226,9 @@ app.patch(
   '/sessions/:fecha/:classId/attendance/:attendeeId',
   requireAdmin,
   async (c) => {
-    const fecha = c.req.param('fecha')
-    const classId = c.req.param('classId')
-    const attendeeId = c.req.param('attendeeId')
+    const fecha = param(c, 'fecha')
+    const classId = param(c, 'classId')
+    const attendeeId = param(c, 'attendeeId')
     const body = await c.req.json<{
       pago?: string | null
       promo?: string | null
@@ -246,8 +256,8 @@ app.patch(
 )
 
 app.delete('/sessions/:fecha/:classId', requireAdmin, async (c) => {
-  const fecha = c.req.param('fecha')
-  const classId = c.req.param('classId')
+  const fecha = param(c, 'fecha')
+  const classId = param(c, 'classId')
   await pool.query(
     `DELETE FROM sessions WHERE class_id = $1 AND fecha = $2::date`,
     [classId, fecha],
@@ -256,8 +266,8 @@ app.delete('/sessions/:fecha/:classId', requireAdmin, async (c) => {
 })
 
 app.get('/sessions/:fecha/:classId/metrics', requireAdmin, async (c) => {
-  const fecha = c.req.param('fecha')
-  const classId = c.req.param('classId')
+  const fecha = param(c, 'fecha')
+  const classId = param(c, 'classId')
   const sessionId = await ensureSession(classId, fecha)
 
   const classResult = await pool.query<{ precio: string | number }>(

@@ -63,7 +63,7 @@ export function AttendeeForm({
           id="nombre"
           className="input"
           autoComplete="off"
-          placeholder="🔥 Tu nombre"
+          placeholder="Tu nombre 🔥"
           value={texto}
           onChange={(e) => {
             setTexto(e.target.value);

@@ -1071,6 +1071,20 @@ input[type='number']::-webkit-inner-spin-button {
   padding: 1.5rem 0;
 }
 
+/* Full-viewport centering for login / session waits */
+.salsa-loader-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.salsa-loader-screen .salsa-loader {
+  padding: 0;
+}
+
 .salsa-steps,
 .salsa-rueda {
   display: grid;

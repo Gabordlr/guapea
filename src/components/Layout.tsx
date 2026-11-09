@@ -36,7 +36,7 @@ export function Layout() {
                 `nav-link${isActive ? " active" : ""}`
               }
             >
-              Entrar
+              Admin
             </NavLink>
           )}
         </nav>
