@@ -58,6 +58,11 @@ type CobroFields = {
   promo?: Promo
 }
 
+/** True once admin picked any payment method (incl. sin pago). */
+export function tienePagoElegido(pago: MetodoPago | undefined): boolean {
+  return Boolean(pago)
+}
+
 /** Toggle a promo and apply any declared payment side-effects. */
 export function applyPromoChange(current: CobroFields, promo: Promo): CobroFields {
   const nextPromo = current.promo === promo ? undefined : promo

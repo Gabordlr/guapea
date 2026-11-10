@@ -206,6 +206,53 @@ input[type='time'] {
   overflow-wrap: anywhere;
 }
 
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+  min-width: 0;
+}
+
+.panel-head h2,
+.panel-head h3 {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.cobro-filter-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.cobro-filter-btn.active {
+  background: rgba(255, 138, 61, 0.16);
+  border-color: rgba(255, 138, 61, 0.5);
+  color: var(--accent-hot);
+}
+
+.cobro-filter-count {
+  min-width: 1.25rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.cobro-filter-btn.active .cobro-filter-count {
+  background: rgba(255, 138, 61, 0.22);
+}
+
 .label {
   display: block;
   font-size: 0.72rem;
@@ -669,6 +716,11 @@ input[type='number']::-webkit-inner-spin-button {
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
+}
+
+.admin-person.is-cobrado {
+  background: rgba(240, 199, 94, 0.1);
+  border-color: rgba(240, 199, 94, 0.32);
 }
 
 .admin-person-top {

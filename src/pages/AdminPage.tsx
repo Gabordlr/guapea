@@ -37,6 +37,7 @@ import {
   applyPromoChange,
   formatPromoPrecio,
   PROMOS,
+  tienePagoElegido,
 } from "../utils/pricing";
 import { computeSessionMetrics } from "../utils/sessionMetrics";
 
@@ -70,6 +71,7 @@ export function AdminPage() {
   const [dayClasses, setDayClasses] = useState<Clase[]>([]);
   const [metrics, setMetrics] = useState<MetricasSesion | null>(null);
   const [cobroSearch, setCobroSearch] = useState("");
+  const [soloPendientes, setSoloPendientes] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<Asistente | null>(null);
   const [pendingDeleteClass, setPendingDeleteClass] = useState<Clase | null>(
     null,
@@ -90,13 +92,19 @@ export function AdminPage() {
   const selectedClass = dayClasses.find((c) => c.id === claseId);
   precioRef.current = selectedClass?.precio ?? 0;
 
+  const pendientesCount = useMemo(
+    () => attendees.filter((a) => !tienePagoElegido(a.pago)).length,
+    [attendees],
+  );
+
   const filteredAttendees = useMemo(() => {
     const q = cobroSearch.trim().toLowerCase();
-    if (!q) return attendees;
-    return attendees.filter((a) =>
-      `${a.emoji} ${a.nombre}`.toLowerCase().includes(q),
-    );
-  }, [attendees, cobroSearch]);
+    return attendees.filter((a) => {
+      if (soloPendientes && tienePagoElegido(a.pago)) return false;
+      if (!q) return true;
+      return `${a.emoji} ${a.nombre}`.toLowerCase().includes(q);
+    });
+  }, [attendees, cobroSearch, soloPendientes]);
 
   function syncMetrics(list: Asistente[], precio = precioRef.current) {
     setMetrics(computeSessionMetrics(list, precio));
@@ -454,7 +462,20 @@ export function AdminPage() {
           {claseId && metrics && selectedClass ? (
             <>
               <div className="panel">
-                <h2>Cobrar — {selectedClass.nombre}</h2>
+                <div className="panel-head">
+                  <h2>Cobrar — {selectedClass.nombre}</h2>
+                  {attendees.length > 0 ? (
+                    <button
+                      type="button"
+                      className={`btn btn-sm cobro-filter-btn${soloPendientes ? " active" : ""}`}
+                      aria-pressed={soloPendientes}
+                      onClick={() => setSoloPendientes((v) => !v)}
+                    >
+                      Pendientes
+                      <span className="cobro-filter-count">{pendientesCount}</span>
+                    </button>
+                  ) : null}
+                </div>
                 {attendees.length === 0 ? (
                   <p className="empty">Todavía no hay nadie en la lista.</p>
                 ) : (
@@ -472,7 +493,7 @@ export function AdminPage() {
                         onChange={(e) => setCobroSearch(e.target.value)}
                         autoComplete="off"
                       />
-                      {cobroSearch.trim() ? (
+                      {cobroSearch.trim() || soloPendientes ? (
                         <small style={{ color: "var(--muted)" }}>
                           {filteredAttendees.length} de {attendees.length}
                         </small>
@@ -480,11 +501,16 @@ export function AdminPage() {
                     </div>
                     {filteredAttendees.length === 0 ? (
                       <p className="empty">
-                        Nadie coincide con “{cobroSearch.trim()}”.
+                        {soloPendientes && !cobroSearch.trim()
+                          ? "Nadie pendiente de cobro."
+                          : `Nadie coincide con “${cobroSearch.trim()}”.`}
                       </p>
                     ) : (
                       filteredAttendees.map((a) => (
-                        <div key={a.id} className="admin-person">
+                        <div
+                          key={a.id}
+                          className={`admin-person${tienePagoElegido(a.pago) ? " is-cobrado" : ""}`}
+                        >
                           <div className="admin-person-top">
                             <strong>
                               {a.emoji ? `${a.emoji} ` : ""}
