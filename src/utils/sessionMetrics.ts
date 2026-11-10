@@ -1,5 +1,5 @@
 import type { Asistente, MetricasSesion } from '../types'
-import { chargeAmount } from './pricing'
+import { chargeAmount, contributionAmount } from './pricing'
 
 /** Same rules as the API metrics endpoint — used for optimistic Cobro UI. */
 export function computeSessionMetrics(
@@ -7,6 +7,17 @@ export function computeSessionMetrics(
   precioClase: number,
 ): MetricasSesion {
   const monto = (a: Asistente) => chargeAmount(a.promo, precioClase)
+
+  const efectivoEsperado = list
+    .filter((a) => a.pago === 'efectivo')
+    .reduce((sum, a) => sum + monto(a), 0)
+  const transferenciaMonto = list
+    .filter((a) => a.pago === 'transferencia')
+    .reduce((sum, a) => sum + monto(a), 0)
+  const totalMonto = list.reduce(
+    (sum, a) => sum + contributionAmount(a.pago, a.promo, precioClase),
+    0,
+  )
 
   return {
     total: list.length,
@@ -17,11 +28,9 @@ export function computeSessionMetrics(
     suscripcion: list.filter((a) => a.pago === 'suscripcion').length,
     sinPagar: list.filter((a) => a.pago === 'sin_pago' || !a.pago).length,
     promoPareja: list.filter((a) => a.promo === 'pareja').length,
-    efectivoEsperado: list
-      .filter((a) => a.pago === 'efectivo')
-      .reduce((sum, a) => sum + monto(a), 0),
-    transferenciaMonto: list
-      .filter((a) => a.pago === 'transferencia')
-      .reduce((sum, a) => sum + monto(a), 0),
+    promoCumpleanos: list.filter((a) => a.promo === 'cumpleanos').length,
+    efectivoEsperado,
+    transferenciaMonto,
+    totalMonto,
   }
 }

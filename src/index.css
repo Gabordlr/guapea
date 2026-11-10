@@ -253,9 +253,14 @@ input[type='time'] {
   flex-shrink: 0;
 }
 
-.date-stepper-btn:active {
+.date-stepper-btn:active:not(:disabled) {
   transform: scale(0.96);
   background: var(--surface-2);
+}
+
+.date-stepper-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .date-stepper-value {

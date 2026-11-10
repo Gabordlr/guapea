@@ -32,7 +32,12 @@ import {
   formatMoney,
   listHorasInicio,
 } from "../utils/format";
-import { PROMOS } from "../utils/pricing";
+import {
+  applyPagoChange,
+  applyPromoChange,
+  formatPromoPrecio,
+  PROMOS,
+} from "../utils/pricing";
 import { computeSessionMetrics } from "../utils/sessionMetrics";
 
 const HORAS_INICIO = listHorasInicio(15);
@@ -346,26 +351,26 @@ export function AdminPage() {
     if (!claseId) return;
     const current = attendees.find((a) => a.id === attendeeId);
     if (!current) return;
-    const nextPago = current.pago === pago ? undefined : pago;
+    const next = { ...current, ...applyPagoChange(current, pago) };
     const nextList = attendees.map((a) =>
-      a.id === attendeeId ? { ...a, pago: nextPago } : a,
+      a.id === attendeeId ? next : a,
     );
     setAttendees(nextList);
     syncMetrics(nextList);
-    markCobroDirty(attendeeId, { ...current, pago: nextPago });
+    markCobroDirty(attendeeId, next);
   }
 
   function handlePromo(attendeeId: string, promo: Promo) {
     if (!claseId) return;
     const current = attendees.find((a) => a.id === attendeeId);
     if (!current) return;
-    const nextPromo = current.promo === promo ? undefined : promo;
+    const next = { ...current, ...applyPromoChange(current, promo) };
     const nextList = attendees.map((a) =>
-      a.id === attendeeId ? { ...a, promo: nextPromo } : a,
+      a.id === attendeeId ? next : a,
     );
     setAttendees(nextList);
     syncMetrics(nextList);
-    markCobroDirty(attendeeId, { ...current, promo: nextPromo });
+    markCobroDirty(attendeeId, next);
   }
 
   async function confirmRemove() {
@@ -510,7 +515,7 @@ export function AdminPage() {
                                 className={`promo-btn ${a.promo === promo.id ? "active" : ""}`}
                                 onClick={() => handlePromo(a.id, promo.id)}
                               >
-                                {promo.label} · {formatMoney(promo.precio)}
+                                {promo.label} · {formatPromoPrecio(promo.precio)}
                               </button>
                             ))}
                           </div>
@@ -553,8 +558,14 @@ export function AdminPage() {
                     </div>
                   </div>
                   <div className="metric">
-                    <div className="k">Promo pareja</div>
-                    <div className="v">{metrics.promoPareja}</div>
+                    <div className="k">Promos</div>
+                    <div className="v">
+                      {metrics.promoPareja + metrics.promoCumpleanos}
+                      <span className="metric-sub">
+                        {" "}
+                        · {metrics.promoPareja}P / {metrics.promoCumpleanos}C
+                      </span>
+                    </div>
                   </div>
                   <div className="metric">
                     <div className="k">Efectivo</div>
@@ -580,6 +591,10 @@ export function AdminPage() {
                   <div className="metric">
                     <div className="k">Sin pago</div>
                     <div className="v">{metrics.sinPagar}</div>
+                  </div>
+                  <div className="metric wide">
+                    <div className="k">Total</div>
+                    <div className="v">{formatMoney(metrics.totalMonto)}</div>
                   </div>
                 </div>
               </div>

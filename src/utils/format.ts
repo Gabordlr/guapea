@@ -27,14 +27,56 @@ export function formatFechaLarga(fecha: string): string {
   })
 }
 
-/** Shift a YYYY-MM-DD date by `days` (can be negative). */
-export function shiftFecha(fecha: string, days: number): string {
-  const d = new Date(`${fecha}T12:00:00`)
-  d.setDate(d.getDate() + days)
+function toISODateLocal(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
+}
+
+/** Shift a YYYY-MM-DD date by `days` (can be negative). */
+export function shiftFecha(fecha: string, days: number): string {
+  const d = new Date(`${fecha}T12:00:00`)
+  d.setDate(d.getDate() + days)
+  return toISODateLocal(d)
+}
+
+/**
+ * Sunday (YYYY-MM-DD) of the Sunday–Saturday week that contains `fecha`.
+ * Matches JS getDay() / classes.dia_de_la_semana.
+ */
+export function startOfWeekContaining(fecha: string): string {
+  const d = new Date(`${fecha}T12:00:00`)
+  d.setDate(d.getDate() - d.getDay())
+  return toISODateLocal(d)
+}
+
+/**
+ * Saturday (YYYY-MM-DD) of the Sunday–Saturday week that contains `fecha`.
+ * Matches JS getDay() / classes.dia_de_la_semana so Sunday → Monday stays in-week.
+ */
+export function endOfWeekContaining(fecha: string): string {
+  const d = new Date(`${fecha}T12:00:00`)
+  d.setDate(d.getDate() + (6 - d.getDay()))
+  return toISODateLocal(d)
+}
+
+/** Whether stepping one day backward from `fecha` stays on or after `minFecha`. */
+export function canGoPrevFecha(
+  fecha: string,
+  minFecha: string | null | undefined,
+): boolean {
+  if (!minFecha) return true
+  return shiftFecha(fecha, -1) >= minFecha
+}
+
+/** Whether stepping one day forward from `fecha` stays on or before `maxFecha`. */
+export function canGoNextFecha(
+  fecha: string,
+  maxFecha: string | null | undefined,
+): boolean {
+  if (!maxFecha) return true
+  return shiftFecha(fecha, 1) <= maxFecha
 }
 
 /** Capitalize first letter — es-MX weekdays come lowercase. */

@@ -1,5 +1,11 @@
 import type { Clase } from '../types'
-import { formatFechaTitulo, formatHorario, shiftFecha } from '../utils/format'
+import {
+  canGoNextFecha,
+  canGoPrevFecha,
+  formatFechaTitulo,
+  formatHorario,
+  shiftFecha,
+} from '../utils/format'
 
 interface SessionPickerProps {
   fecha: string
@@ -7,6 +13,9 @@ interface SessionPickerProps {
   classes: Clase[]
   claseId: string | null
   onClaseChange: (id: string) => void
+  /** When set with maxFecha, Lista stays inside that week. Admin omits both. */
+  minFecha?: string | null
+  maxFecha?: string | null
 }
 
 export function SessionPicker({
@@ -15,7 +24,12 @@ export function SessionPicker({
   classes,
   claseId,
   onClaseChange,
+  minFecha = null,
+  maxFecha = null,
 }: SessionPickerProps) {
+  const canGoPrev = canGoPrevFecha(fecha, minFecha)
+  const canGoNext = canGoNextFecha(fecha, maxFecha)
+
   return (
     <div className="panel">
       <h2>Sesión</h2>
@@ -28,7 +42,11 @@ export function SessionPicker({
             type="button"
             className="date-stepper-btn"
             aria-label="Día anterior"
-            onClick={() => onFechaChange(shiftFecha(fecha, -1))}
+            disabled={!canGoPrev}
+            onClick={() => {
+              if (!canGoPrev) return
+              onFechaChange(shiftFecha(fecha, -1))
+            }}
           >
             ‹
           </button>
@@ -39,7 +57,11 @@ export function SessionPicker({
             type="button"
             className="date-stepper-btn"
             aria-label="Día siguiente"
-            onClick={() => onFechaChange(shiftFecha(fecha, 1))}
+            disabled={!canGoNext}
+            onClick={() => {
+              if (!canGoNext) return
+              onFechaChange(shiftFecha(fecha, 1))
+            }}
           >
             ›
           </button>

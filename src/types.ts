@@ -9,7 +9,7 @@ export type MetodoPago =
   | 'sin_pago'
 
 /** Price override. Not a payment method — pago is still required. */
-export type Promo = 'pareja'
+export type Promo = 'pareja' | 'cumpleanos'
 
 export interface Clase {
   id: string
@@ -47,8 +47,11 @@ export interface MetricasSesion {
   suscripcion: number
   sinPagar: number
   promoPareja: number
+  promoCumpleanos: number
   /** Cash already marked as paid, using each person's promo price when set. */
   efectivoEsperado: number
   /** Transfers already marked as paid, using each person's promo price when set. */
   transferenciaMonto: number
+  /** Efectivo + transferencia + vale (vale = fixed credit). */
+  totalMonto: number
 }

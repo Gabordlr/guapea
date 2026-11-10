@@ -69,7 +69,7 @@ export function mapAttendee(row: AttendanceRow) {
       | 'suscripcion'
       | 'sin_pago'
       | undefined,
-    promo: (row.promo ?? undefined) as 'pareja' | undefined,
+    promo: (row.promo ?? undefined) as 'pareja' | 'cumpleanos' | undefined,
     createdAt:
       typeof row.created_at === 'string'
         ? row.created_at

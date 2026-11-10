@@ -12,8 +12,15 @@ import {
   todayISO,
 } from "../storage/repository";
 import type { Asistente, Clase, Genero } from "../types";
+import {
+  endOfWeekContaining,
+  startOfWeekContaining,
+} from "../utils/format";
 
 export function HomePage() {
+  const today = todayISO();
+  const minFecha = startOfWeekContaining(today);
+  const maxFecha = endOfWeekContaining(today);
   const [fecha, setFecha] = useState(todayISO);
   const [claseId, setClaseId] = useState<string | null>(null);
   const [classes, setClasses] = useState<Clase[]>([]);
@@ -115,11 +122,15 @@ export function HomePage() {
       <SessionPicker
         fecha={fecha}
         onFechaChange={(f) => {
-          setFecha(f);
+          if (f < minFecha) setFecha(minFecha);
+          else if (f > maxFecha) setFecha(maxFecha);
+          else setFecha(f);
         }}
         classes={classes}
         claseId={claseId}
         onClaseChange={setClaseId}
+        minFecha={minFecha}
+        maxFecha={maxFecha}
       />
 
       {loading ? <SalsaLoader kind="basic" size={120} /> : null}
