@@ -1,4 +1,6 @@
 :root {
+  /* Already-dark UI: declare so mobile Chrome won't force-darken accents. */
+  color-scheme: dark;
   --bg: #1a0f14;
   --bg-elevated: #26151d;
   --surface: #321c26;
@@ -184,7 +186,8 @@ input[type='time'] {
   animation: rise 0.5s ease both;
   min-width: 0;
   max-width: 100%;
-  overflow-x: clip;
+  /* Keep visible so the primary CTA's pill radius isn't clipped. */
+  overflow: visible;
 }
 
 .panel:nth-child(2) {
@@ -389,12 +392,14 @@ input[type='number']::-webkit-inner-spin-button {
   gap: 0.35rem;
   min-height: 48px;
   min-width: 0;
+  max-width: 100%;
   padding: 0.65rem 0.9rem;
   border-radius: 999px;
-  border: none;
+  border: 1px solid transparent;
   font-weight: 700;
   transition: transform 0.12s ease, filter 0.12s ease, background 0.12s ease;
   text-align: center;
+  overflow: hidden;
 }
 
 .btn:active {
@@ -1031,10 +1036,11 @@ input[type='number']::-webkit-inner-spin-button {
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1;
+  color: #ef5f6b;
   background: linear-gradient(90deg, #ef5f6b, #f0a35a);
   -webkit-background-clip: text;
   background-clip: text;
-  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
 
 .logo-clave {
