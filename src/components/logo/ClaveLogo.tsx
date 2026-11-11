@@ -13,7 +13,7 @@ const SIZES = {
   sm: {
     font: 'clamp(1.55rem, 6.5vw, 2.05rem)',
     gap: '0.375rem',
-    beat: 6,
+    beat: 7,
     beatsPad: '0 2px',
   },
   icon: { font: '2.75rem', gap: '5px', beat: 6, beatsPad: '0' },

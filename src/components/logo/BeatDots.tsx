@@ -7,8 +7,8 @@ type Props = {
 }
 
 export function BeatDots({ size = 5, className = 'logo-beats' }: Props) {
-  // Hairline ring so the open center (beats 4 & 8) reads clearly at small sizes.
-  const ring = Math.max(1, size * 0.16)
+  // Slightly thicker than a hairline so hollow beats 4 & 8 stay visible at sm.
+  const ring = Math.max(1.25, size * 0.22)
   return (
     <div className={className} aria-hidden="true">
       {BEAT_COLORS.map((color, i) =>
