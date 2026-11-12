@@ -42,7 +42,7 @@ export function contributionAmount(
   promo: Promo | undefined,
   precioClase: number,
 ): number {
-  if (pago === 'suscripcion') return VALE_MONTO
+  // if (pago === 'suscripcion') return VALE_MONTO - Vale monto removed from total
   if (pago === 'efectivo' || pago === 'transferencia') {
     return chargeAmount(promo, precioClase)
   }
