@@ -28,7 +28,7 @@ export function LoginPage() {
     (location.state as { from?: string } | null)?.from &&
     (location.state as { from: string }).from !== "/login"
       ? (location.state as { from: string }).from
-      : "/admin";
+      : "/cobro";
 
   const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");

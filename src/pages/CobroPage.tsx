@@ -8,19 +8,15 @@ import { SessionPicker } from "../components/SessionPicker";
 import {
   addAttendee,
   classesForDate,
-  deleteClass,
   getAttendance,
   getSessionSales,
-  listClasses,
   patchAttendeeCobro,
   removeAttendee,
-  saveClass,
   todayISO,
 } from "../storage/repository";
 import type {
   Asistente,
   Clase,
-  DiaSemana,
   Genero,
   MetodoPago,
   MetricasSesion,
@@ -28,13 +24,7 @@ import type {
   Venta,
 } from "../types";
 import { ValesPanel } from "./ValesPanel";
-import {
-  DIAS,
-  DURACIONES,
-  formatHorario,
-  formatMoney,
-  listHorasInicio,
-} from "../utils/format";
+import { formatMoney } from "../utils/format";
 import {
   applyPagoChange,
   applyPromoChange,
@@ -44,45 +34,27 @@ import {
 } from "../utils/pricing";
 import { computeSessionMetrics } from "../utils/sessionMetrics";
 
-const HORAS_INICIO = listHorasInicio(15);
-
 type CobroDirty = {
   pago: MetodoPago | undefined;
   promo: Promo | undefined;
 };
 
-type AdminTab = "cobro" | "vales" | "clases";
+type CobroTab = "cobro" | "vales";
 
-const EMPTY_FORM = {
-  nombre: "",
-  descripcion: "",
-  diaDeLaSemana: 3 as DiaSemana,
-  horaInicio: "19:00",
-  duracionMinutos: 60,
-  precio: 150,
-};
-
-export function AdminPage() {
+export function CobroPage() {
   const navigate = useNavigate();
   const session = authClient.useSession();
-  const [tab, setTab] = useState<AdminTab>("cobro");
+  const [tab, setTab] = useState<CobroTab>("cobro");
   const [tick, setTick] = useState(0);
   const [fecha, setFecha] = useState(todayISO);
   const [claseId, setClaseId] = useState<string | null>(null);
   const [attendees, setAttendees] = useState<Asistente[]>([]);
-  const [allClasses, setAllClasses] = useState<Clase[]>([]);
   const [dayClasses, setDayClasses] = useState<Clase[]>([]);
   const [metrics, setMetrics] = useState<MetricasSesion | null>(null);
   const [sessionSales, setSessionSales] = useState<Venta[]>([]);
   const [cobroSearch, setCobroSearch] = useState("");
   const [soloPendientes, setSoloPendientes] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<Asistente | null>(null);
-  const [pendingDeleteClass, setPendingDeleteClass] = useState<Clase | null>(
-    null,
-  );
-  const [editing, setEditing] = useState<Clase | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [formError, setFormError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [flushError, setFlushError] = useState<string | null>(null);
 
@@ -173,16 +145,14 @@ export function AdminPage() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listClasses(), classesForDate(fecha)])
-      .then(([all, day]) => {
+    classesForDate(fecha)
+      .then((day) => {
         if (cancelled) return;
-        setAllClasses(all);
         setDayClasses(day);
         setLoadError(null);
       })
       .catch((err: Error) => {
         if (cancelled) return;
-        setAllClasses([]);
         setDayClasses([]);
         setLoadError(err.message);
       });
@@ -286,86 +256,6 @@ export function AdminPage() {
     setTick((t) => t + 1);
   }
 
-  function startCreate() {
-    setEditing(null);
-    setForm(EMPTY_FORM);
-    setFormError(null);
-  }
-
-  function startEdit(c: Clase) {
-    setEditing(c);
-    setForm({
-      nombre: c.nombre,
-      descripcion: c.descripcion,
-      diaDeLaSemana: c.diaDeLaSemana,
-      horaInicio: c.horaInicio,
-      duracionMinutos: c.duracionMinutos,
-      precio: c.precio,
-    });
-    setFormError(null);
-  }
-
-  function normalizeTime(value: string): string {
-    const trimmed = value.trim();
-    if (/^\d{2}:\d{2}$/.test(trimmed)) return trimmed;
-    if (/^\d{2}:\d{2}:\d{2}$/.test(trimmed)) return trimmed.slice(0, 5);
-    return trimmed;
-  }
-
-  async function handleSaveClass(e?: React.FormEvent) {
-    e?.preventDefault();
-    const nombre = form.nombre.trim();
-    const horaInicio = normalizeTime(form.horaInicio);
-    const duracionMinutos = Number(form.duracionMinutos);
-    const precio = Number(form.precio);
-
-    if (!nombre) {
-      setFormError("Escribe un nombre para la clase.");
-      return;
-    }
-    if (!horaInicio) {
-      setFormError("Elige a qué hora empieza.");
-      return;
-    }
-    if (!Number.isFinite(duracionMinutos) || duracionMinutos < 15) {
-      setFormError("La duración mínima es 15 minutos.");
-      return;
-    }
-    if (!Number.isFinite(precio) || precio < 0) {
-      setFormError("Revisa el precio.");
-      return;
-    }
-
-    try {
-      await saveClass({
-        id: editing?.id,
-        nombre,
-        descripcion: form.descripcion.trim(),
-        diaDeLaSemana: form.diaDeLaSemana,
-        horaInicio,
-        duracionMinutos: Math.max(15, duracionMinutos),
-        precio,
-      });
-      setFormError(null);
-      startCreate();
-      refresh();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "No se pudo guardar");
-    }
-  }
-
-  async function confirmDeleteClass() {
-    if (!pendingDeleteClass) return;
-    try {
-      await deleteClass(pendingDeleteClass.id);
-      setPendingDeleteClass(null);
-      if (editing?.id === pendingDeleteClass.id) startCreate();
-      refresh();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "No se pudo borrar");
-    }
-  }
-
   async function handleAdd(data: {
     nombre: string;
     emoji: string;
@@ -429,9 +319,9 @@ export function AdminPage() {
         }}
       >
         <div>
-          <h1 className="page-title">Admin</h1>
+          <h1 className="page-title">Cobro</h1>
           <p className="page-sub">
-            Clases semanales y cobro al final de la sesión.
+            Cobro al final de la sesión.
             {session.data?.user?.name || session.data?.user?.email
               ? ` · ${session.data.user.name || session.data.user.email}`
               : null}
@@ -462,7 +352,7 @@ export function AdminPage() {
             setTick((t) => t + 1);
           }}
         >
-          Cobro
+          Clases
         </button>
         <button
           type="button"
@@ -470,13 +360,6 @@ export function AdminPage() {
           onClick={() => setTab("vales")}
         >
           Vales
-        </button>
-        <button
-          type="button"
-          className={`tab ${tab === "clases" ? "active" : ""}`}
-          onClick={() => setTab("clases")}
-        >
-          Clases
         </button>
       </div>
 
@@ -487,7 +370,7 @@ export function AdminPage() {
           dayClasses={dayClasses}
           onClaseLinked={setClaseId}
         />
-      ) : tab === "cobro" ? (
+      ) : (
         <>
           <SessionPicker
             fecha={fecha}
@@ -674,7 +557,7 @@ export function AdminPage() {
                       <div className="v">
                         {formatMoney(
                           metrics.efectivoEsperado +
-                            sessionSalesTotals.efectivo,
+                          sessionSalesTotals.efectivo,
                         )}
                         <span className="metric-breakdown">
                           {formatMoney(metrics.efectivoEsperado)} +{" "}
@@ -687,7 +570,7 @@ export function AdminPage() {
                       <div className="v">
                         {formatMoney(
                           metrics.transferenciaMonto +
-                            sessionSalesTotals.transferencia,
+                          sessionSalesTotals.transferencia,
                         )}
                         <span className="metric-breakdown">
                           {formatMoney(metrics.transferenciaMonto)} +{" "}
@@ -700,14 +583,14 @@ export function AdminPage() {
                       <div className="v">
                         {formatMoney(
                           metrics.totalMonto +
-                            sessionSalesTotals.efectivo +
-                            sessionSalesTotals.transferencia,
+                          sessionSalesTotals.efectivo +
+                          sessionSalesTotals.transferencia,
                         )}
                         <span className="metric-breakdown">
                           {formatMoney(metrics.totalMonto)} +{" "}
                           {formatMoney(
                             sessionSalesTotals.efectivo +
-                              sessionSalesTotals.transferencia,
+                            sessionSalesTotals.transferencia,
                           )}
                         </span>
                       </div>
@@ -723,211 +606,6 @@ export function AdminPage() {
             </>
           ) : null}
         </>
-      ) : (
-        <>
-          <form className="panel" onSubmit={handleSaveClass} noValidate>
-            <h2>{editing ? "Editar clase" : "Nueva clase"}</h2>
-            <div className="field">
-              <label className="label" htmlFor="c-nombre">
-                Nombre
-              </label>
-              <input
-                id="c-nombre"
-                className="input"
-                value={form.nombre}
-                placeholder="Intermedio"
-                onChange={(e) => {
-                  setForm({ ...form, nombre: e.target.value });
-                  setFormError(null);
-                }}
-              />
-            </div>
-            <div className="field">
-              <label className="label" htmlFor="c-desc">
-                Descripción
-              </label>
-              <textarea
-                id="c-desc"
-                className="textarea"
-                value={form.descripcion}
-                placeholder="Nivel intermedio, foco en musicalidad"
-                onChange={(e) =>
-                  setForm({ ...form, descripcion: e.target.value })
-                }
-              />
-            </div>
-            <div className="field">
-              <label className="label" htmlFor="c-dia">
-                Día
-              </label>
-              <select
-                id="c-dia"
-                className="select"
-                value={form.diaDeLaSemana}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    diaDeLaSemana: Number(e.target.value) as DiaSemana,
-                  })
-                }
-              >
-                {(Object.entries(DIAS) as [string, string][]).map(
-                  ([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ),
-                )}
-              </select>
-            </div>
-            <div className="row-2">
-              <div className="field">
-                <label className="label" htmlFor="c-hora">
-                  Empieza
-                </label>
-                <select
-                  id="c-hora"
-                  className="select"
-                  value={form.horaInicio}
-                  onChange={(e) => {
-                    setForm({ ...form, horaInicio: e.target.value });
-                    setFormError(null);
-                  }}
-                >
-                  {!HORAS_INICIO.includes(form.horaInicio) &&
-                  form.horaInicio ? (
-                    <option value={form.horaInicio}>{form.horaInicio}</option>
-                  ) : null}
-                  {HORAS_INICIO.map((hora) => (
-                    <option key={hora} value={hora}>
-                      {hora}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label className="label" htmlFor="c-duracion">
-                  Duración
-                </label>
-                <select
-                  id="c-duracion"
-                  className="select"
-                  value={form.duracionMinutos}
-                  onChange={(e) => {
-                    setForm({
-                      ...form,
-                      duracionMinutos: Number(e.target.value),
-                    });
-                    setFormError(null);
-                  }}
-                >
-                  {!(DURACIONES as readonly number[]).includes(
-                    form.duracionMinutos,
-                  ) ? (
-                    <option value={form.duracionMinutos}>
-                      {form.duracionMinutos} min
-                    </option>
-                  ) : null}
-                  {DURACIONES.map((mins) => (
-                    <option key={mins} value={mins}>
-                      {mins} min
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            {form.horaInicio ? (
-              <p className="empty" style={{ marginTop: "-0.35rem" }}>
-                Horario: {formatHorario(form)}
-              </p>
-            ) : null}
-            <div className="field">
-              <label className="label" htmlFor="c-precio">
-                Precio
-              </label>
-              <input
-                id="c-precio"
-                className="input"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={form.precio}
-                onChange={(e) => {
-                  const raw = e.target.value.replace(/\D/g, "");
-                  setForm({
-                    ...form,
-                    precio: raw === "" ? 0 : Number(raw),
-                  });
-                  setFormError(null);
-                }}
-              />
-            </div>
-            {formError ? (
-              <p className="form-error" role="alert">
-                {formError}
-              </p>
-            ) : null}
-            <div className={`form-actions${editing ? " split" : ""}`}>
-              {editing ? (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={startCreate}
-                >
-                  Cancelar
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => handleSaveClass()}
-              >
-                {editing ? "Guardar" : "Crear clase"}
-              </button>
-            </div>
-          </form>
-
-          <div className="panel">
-            <h2>Clases semanales</h2>
-            {allClasses.length === 0 ? (
-              <p className="empty">
-                Aún no hay clases. Crea la primera arriba (ej. Intermedio los
-                miércoles).
-              </p>
-            ) : (
-              allClasses.map((c) => (
-                <div key={c.id} className="class-card">
-                  <div className="class-card-top">
-                    <div>
-                      <h3>{c.nombre}</h3>
-                      <p>
-                        {DIAS[c.diaDeLaSemana]} · {formatHorario(c)} ·{" "}
-                        {formatMoney(c.precio)}
-                      </p>
-                      {c.descripcion ? <p>{c.descripcion}</p> : null}
-                    </div>
-                    <div className="class-actions">
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => startEdit(c)}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-danger btn-sm"
-                        onClick={() => setPendingDeleteClass(c)}
-                      >
-                        Borrar
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </>
       )}
 
       {pendingRemove ? (
@@ -936,16 +614,6 @@ export function AdminPage() {
           message={`¿Seguro que quieres quitar a ${pendingRemove.nombre}?`}
           onConfirm={confirmRemove}
           onCancel={() => setPendingRemove(null)}
-        />
-      ) : null}
-
-      {pendingDeleteClass ? (
-        <ConfirmDialog
-          title="¿Borrar clase?"
-          message={`Se eliminará “${pendingDeleteClass.nombre}” del horario semanal. Las listas de asistencia ya guardadas se mantienen.`}
-          confirmLabel="Borrar"
-          onConfirm={confirmDeleteClass}
-          onCancel={() => setPendingDeleteClass(null)}
         />
       ) : null}
     </div>

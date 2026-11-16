@@ -13,7 +13,7 @@ interface SessionPickerProps {
   classes: Clase[]
   claseId: string | null
   onClaseChange: (id: string) => void
-  /** When set with maxFecha, Lista stays inside that week. Admin omits both. */
+  /** When set with maxFecha, Lista stays inside that week. Cobro omits both. */
   minFecha?: string | null
   maxFecha?: string | null
 }
@@ -72,7 +72,7 @@ export function SessionPicker({
         <span className="label">Clase</span>
         {classes.length === 0 ? (
           <p className="empty">
-            No hay clases programadas para este día. Crea una en Admin.
+            No hay clases programadas para este día. Crea una en Clases.
           </p>
         ) : (
           <div className="class-list">
