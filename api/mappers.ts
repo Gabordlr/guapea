@@ -76,3 +76,57 @@ export function mapAttendee(row: AttendanceRow) {
         : row.created_at.toISOString(),
   }
 }
+
+export type ProductRow = {
+  id: string
+  nombre: string
+  precio_default: string | number
+  categoria: string
+  activo: boolean
+}
+
+export function mapProduct(row: ProductRow) {
+  return {
+    id: row.id,
+    nombre: row.nombre,
+    precioDefault: Number(row.precio_default),
+    categoria: row.categoria as 'vale' | 'comida',
+    activo: row.activo,
+  }
+}
+
+export type SaleRow = {
+  id: string
+  product_id: string
+  product_nombre: string
+  product_categoria: string
+  nombre: string
+  monto: string | number
+  metodo_pago: string
+  fecha: string | Date
+  session_id: string | null
+  created_at: Date | string
+}
+
+function formatFecha(value: string | Date): string {
+  if (typeof value === 'string') return value.slice(0, 10)
+  return value.toISOString().slice(0, 10)
+}
+
+export function mapSale(row: SaleRow) {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    productNombre: row.product_nombre,
+    productCategoria: row.product_categoria as 'vale' | 'comida',
+    nombre: row.nombre,
+    monto: Number(row.monto),
+    metodoPago: row.metodo_pago as 'efectivo' | 'transferencia',
+    fecha: formatFecha(row.fecha),
+    sessionId: row.session_id,
+    createdAt:
+      typeof row.created_at === 'string'
+        ? row.created_at
+        : row.created_at.toISOString(),
+  }
+}

@@ -52,6 +52,33 @@ export interface MetricasSesion {
   efectivoEsperado: number
   /** Transfers already marked as paid, using each person's promo price when set. */
   transferenciaMonto: number
-  /** Efectivo + transferencia + vale (vale = fixed credit). */
+  /** Efectivo + transferencia (class cobros). Vale sales are separate. */
   totalMonto: number
+}
+
+export type ProductCategoria = 'vale' | 'comida'
+
+/** Cash-in method for a product sale (not attendance cobro). */
+export type MetodoPagoVenta = 'efectivo' | 'transferencia'
+
+export interface Producto {
+  id: string
+  nombre: string
+  precioDefault: number
+  categoria: ProductCategoria
+  activo: boolean
+}
+
+/** Receipt: someone bought a catalog product. */
+export interface Venta {
+  id: string
+  productId: string
+  productNombre: string
+  productCategoria: ProductCategoria
+  nombre: string
+  monto: number
+  metodoPago: MetodoPagoVenta
+  fecha: string
+  sessionId: string | null
+  createdAt: string
 }

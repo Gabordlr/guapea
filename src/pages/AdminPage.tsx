@@ -10,6 +10,7 @@ import {
   classesForDate,
   deleteClass,
   getAttendance,
+  getSessionSales,
   listClasses,
   patchAttendeeCobro,
   removeAttendee,
@@ -24,7 +25,9 @@ import type {
   MetodoPago,
   MetricasSesion,
   Promo,
+  Venta,
 } from "../types";
+import { ValesPanel } from "./ValesPanel";
 import {
   DIAS,
   DURACIONES,
@@ -48,7 +51,7 @@ type CobroDirty = {
   promo: Promo | undefined;
 };
 
-type AdminTab = "cobro" | "clases";
+type AdminTab = "cobro" | "vales" | "clases";
 
 const EMPTY_FORM = {
   nombre: "",
@@ -70,6 +73,7 @@ export function AdminPage() {
   const [allClasses, setAllClasses] = useState<Clase[]>([]);
   const [dayClasses, setDayClasses] = useState<Clase[]>([]);
   const [metrics, setMetrics] = useState<MetricasSesion | null>(null);
+  const [sessionSales, setSessionSales] = useState<Venta[]>([]);
   const [cobroSearch, setCobroSearch] = useState("");
   const [soloPendientes, setSoloPendientes] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<Asistente | null>(null);
@@ -203,6 +207,7 @@ export function AdminPage() {
     if (!claseId) {
       setAttendees([]);
       setMetrics(null);
+      setSessionSales([]);
       return;
     }
     let cancelled = false;
@@ -218,10 +223,30 @@ export function AdminPage() {
       .catch((err: Error) => {
         if (!cancelled) setLoadError(err.message);
       });
+    getSessionSales(fecha, claseId)
+      .then((list) => {
+        if (!cancelled) setSessionSales(list);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setSessionSales([]);
+          setLoadError(err.message);
+        }
+      });
     return () => {
       cancelled = true;
     };
   }, [fecha, claseId, tick]);
+
+  const sessionSalesTotals = useMemo(() => {
+    let efectivo = 0;
+    let transferencia = 0;
+    for (const s of sessionSales) {
+      if (s.metodoPago === "efectivo") efectivo += s.monto;
+      else if (s.metodoPago === "transferencia") transferencia += s.monto;
+    }
+    return { efectivo, transferencia };
+  }, [sessionSales]);
 
   // Hard-flush dirty cobro when leaving this day/class session.
   useEffect(() => {
@@ -360,9 +385,7 @@ export function AdminPage() {
     const current = attendees.find((a) => a.id === attendeeId);
     if (!current) return;
     const next = { ...current, ...applyPagoChange(current, pago) };
-    const nextList = attendees.map((a) =>
-      a.id === attendeeId ? next : a,
-    );
+    const nextList = attendees.map((a) => (a.id === attendeeId ? next : a));
     setAttendees(nextList);
     syncMetrics(nextList);
     markCobroDirty(attendeeId, next);
@@ -373,9 +396,7 @@ export function AdminPage() {
     const current = attendees.find((a) => a.id === attendeeId);
     if (!current) return;
     const next = { ...current, ...applyPromoChange(current, promo) };
-    const nextList = attendees.map((a) =>
-      a.id === attendeeId ? next : a,
-    );
+    const nextList = attendees.map((a) => (a.id === attendeeId ? next : a));
     setAttendees(nextList);
     syncMetrics(nextList);
     markCobroDirty(attendeeId, next);
@@ -436,9 +457,19 @@ export function AdminPage() {
         <button
           type="button"
           className={`tab ${tab === "cobro" ? "active" : ""}`}
-          onClick={() => setTab("cobro")}
+          onClick={() => {
+            setTab("cobro");
+            setTick((t) => t + 1);
+          }}
         >
           Cobro
+        </button>
+        <button
+          type="button"
+          className={`tab ${tab === "vales" ? "active" : ""}`}
+          onClick={() => setTab("vales")}
+        >
+          Vales
         </button>
         <button
           type="button"
@@ -449,7 +480,14 @@ export function AdminPage() {
         </button>
       </div>
 
-      {tab === "cobro" ? (
+      {tab === "vales" ? (
+        <ValesPanel
+          fecha={fecha}
+          onFechaChange={setFecha}
+          dayClasses={dayClasses}
+          onClaseLinked={setClaseId}
+        />
+      ) : tab === "cobro" ? (
         <>
           <SessionPicker
             fecha={fecha}
@@ -472,7 +510,9 @@ export function AdminPage() {
                       onClick={() => setSoloPendientes((v) => !v)}
                     >
                       Pendientes
-                      <span className="cobro-filter-count">{pendientesCount}</span>
+                      <span className="cobro-filter-count">
+                        {pendientesCount}
+                      </span>
                     </button>
                   ) : null}
                 </div>
@@ -541,7 +581,8 @@ export function AdminPage() {
                                 className={`promo-btn ${a.promo === promo.id ? "active" : ""}`}
                                 onClick={() => handlePromo(a.id, promo.id)}
                               >
-                                {promo.label} · {formatPromoPrecio(promo.precio)}
+                                {promo.label} ·{" "}
+                                {formatPromoPrecio(promo.precio)}
                               </button>
                             ))}
                           </div>
@@ -571,7 +612,7 @@ export function AdminPage() {
                 )}
               </div>
               <div className="panel">
-                <h2>Métricas</h2>
+                <h2>Clase</h2>
                 <div className="metrics">
                   <div className="metric">
                     <div className="k">Personas</div>
@@ -624,6 +665,56 @@ export function AdminPage() {
                   </div>
                 </div>
               </div>
+              {sessionSales.length > 0 ? (
+                <div className="panel">
+                  <h2>Clase + Nuevos vales</h2>
+                  <div className="metrics">
+                    <div className="metric">
+                      <div className="k">Efectivo</div>
+                      <div className="v">
+                        {formatMoney(
+                          metrics.efectivoEsperado +
+                            sessionSalesTotals.efectivo,
+                        )}
+                        <span className="metric-breakdown">
+                          {formatMoney(metrics.efectivoEsperado)} +{" "}
+                          {formatMoney(sessionSalesTotals.efectivo)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="metric">
+                      <div className="k">Transferencia</div>
+                      <div className="v">
+                        {formatMoney(
+                          metrics.transferenciaMonto +
+                            sessionSalesTotals.transferencia,
+                        )}
+                        <span className="metric-breakdown">
+                          {formatMoney(metrics.transferenciaMonto)} +{" "}
+                          {formatMoney(sessionSalesTotals.transferencia)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="metric wide">
+                      <div className="k">Total</div>
+                      <div className="v">
+                        {formatMoney(
+                          metrics.totalMonto +
+                            sessionSalesTotals.efectivo +
+                            sessionSalesTotals.transferencia,
+                        )}
+                        <span className="metric-breakdown">
+                          {formatMoney(metrics.totalMonto)} +{" "}
+                          {formatMoney(
+                            sessionSalesTotals.efectivo +
+                              sessionSalesTotals.transferencia,
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               <AttendeeForm
                 onSubmit={handleAdd}
                 title="Agregar persona"
@@ -703,7 +794,8 @@ export function AdminPage() {
                     setFormError(null);
                   }}
                 >
-                  {!HORAS_INICIO.includes(form.horaInicio) && form.horaInicio ? (
+                  {!HORAS_INICIO.includes(form.horaInicio) &&
+                  form.horaInicio ? (
                     <option value={form.horaInicio}>{form.horaInicio}</option>
                   ) : null}
                   {HORAS_INICIO.map((hora) => (
