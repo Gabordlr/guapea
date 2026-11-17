@@ -21,14 +21,24 @@ export function Layout() {
             Lista
           </NavLink>
           {isAdmin ? (
-            <NavLink
-              to="/admin"
-              className={({ isActive }) =>
-                `nav-link${isActive ? " active" : ""}`
-              }
-            >
-              Admin
-            </NavLink>
+            <>
+              <NavLink
+                to="/cobro"
+                className={({ isActive }) =>
+                  `nav-link${isActive ? " active" : ""}`
+                }
+              >
+                Cobro
+              </NavLink>
+              <NavLink
+                to="/clases"
+                className={({ isActive }) =>
+                  `nav-link${isActive ? " active" : ""}`
+                }
+              >
+                Clases
+              </NavLink>
+            </>
           ) : (
             <NavLink
               to="/login"

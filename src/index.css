@@ -681,6 +681,17 @@ input[type='number']::-webkit-inner-spin-button {
   color: var(--muted);
 }
 
+.metric-breakdown {
+  display: block;
+  margin-top: 0.2rem;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
 .tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1194,5 +1205,54 @@ input[type='number']::-webkit-inner-spin-button {
   .loaders-grid {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.check-row input {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--gold);
+}
+
+.vale-sales-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.vale-sale-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--muted) 25%, transparent);
+}
+
+.vale-sale-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.vale-sale-row strong {
+  display: block;
+}
+
+.vale-sale-row small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--muted);
 }
 

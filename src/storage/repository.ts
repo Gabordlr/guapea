@@ -4,8 +4,12 @@ import type {
   Clase,
   Genero,
   MetodoPago,
+  MetodoPagoVenta,
   MetricasSesion,
+  ProductCategoria,
+  Producto,
   Promo,
+  Venta,
 } from '../types'
 import { getRememberedNames, rememberName } from './remembered'
 
@@ -162,4 +166,50 @@ export async function getSessionMetrics(
   return apiFetch<MetricasSesion>(`/sessions/${fecha}/${claseId}/metrics`, {
     auth: true,
   })
+}
+
+export async function listProducts(
+  categoria?: ProductCategoria,
+): Promise<Producto[]> {
+  const q = categoria ? `?categoria=${categoria}` : ''
+  return apiFetch<Producto[]>(`/products${q}`, { auth: true })
+}
+
+export async function listSales(
+  fecha: string,
+  categoria?: ProductCategoria,
+): Promise<Venta[]> {
+  const params = new URLSearchParams({ fecha })
+  if (categoria) params.set('categoria', categoria)
+  return apiFetch<Venta[]>(`/sales?${params}`, { auth: true })
+}
+
+export async function getSessionSales(
+  fecha: string,
+  claseId: string,
+): Promise<Venta[]> {
+  const data = await apiFetch<{ sessionId: string; sales: Venta[] }>(
+    `/sessions/${fecha}/${claseId}/sales`,
+    { auth: true },
+  )
+  return data.sales
+}
+
+export async function createSale(input: {
+  productId: string
+  nombre: string
+  monto: number
+  metodoPago: MetodoPagoVenta
+  fecha: string
+  classId?: string | null
+}): Promise<Venta> {
+  return apiFetch<Venta>('/sales', {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(input),
+  })
+}
+
+export async function deleteSale(id: string): Promise<void> {
+  await apiFetch(`/sales/${id}`, { method: 'DELETE', auth: true })
 }

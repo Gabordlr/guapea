@@ -8,9 +8,38 @@ import {
   joinNombre,
   mapAttendee,
   mapClass,
+  mapProduct,
+  mapSale,
   type AttendanceRow,
   type ClassRow,
+  type ProductRow,
+  type SaleRow,
 } from './mappers'
+
+const PRODUCT_CATEGORIAS = ['vale', 'comida'] as const
+type ProductCategoria = (typeof PRODUCT_CATEGORIAS)[number]
+
+const METODOS_PAGO_VENTA = ['efectivo', 'transferencia'] as const
+type MetodoPagoVenta = (typeof METODOS_PAGO_VENTA)[number]
+
+function isProductCategoria(value: unknown): value is ProductCategoria {
+  return (
+    typeof value === 'string' &&
+    (PRODUCT_CATEGORIAS as readonly string[]).includes(value)
+  )
+}
+
+function isMetodoPagoVenta(value: unknown): value is MetodoPagoVenta {
+  return (
+    typeof value === 'string' &&
+    (METODOS_PAGO_VENTA as readonly string[]).includes(value)
+  )
+}
+
+const SALE_SELECT = `
+  s.id, s.product_id, s.nombre, s.monto, s.metodo_pago, s.fecha, s.session_id,
+  s.created_at, p.nombre AS product_nombre, p.categoria AS product_categoria
+`
 
 type Variables = { user: { sub: string } }
 
@@ -323,6 +352,146 @@ app.get('/sessions/:fecha/:classId/metrics', requireAdmin, async (c) => {
     transferenciaMonto,
     totalMonto,
   })
+})
+
+/** Admin: product catalog (vales now; filter by categoria). */
+app.get('/products', requireAdmin, async (c) => {
+  const categoria = c.req.query('categoria')
+  if (categoria && !isProductCategoria(categoria)) {
+    return c.json({ error: 'categoria invalid' }, 400)
+  }
+
+  const result = categoria
+    ? await pool.query<ProductRow>(
+        `SELECT id, nombre, precio_default, categoria, activo
+         FROM products
+         WHERE activo = true AND categoria = $1
+         ORDER BY nombre`,
+        [categoria],
+      )
+    : await pool.query<ProductRow>(
+        `SELECT id, nombre, precio_default, categoria, activo
+         FROM products
+         WHERE activo = true
+         ORDER BY categoria, nombre`,
+      )
+
+  return c.json(result.rows.map(mapProduct))
+})
+
+/** Admin: list sales for a calendar date (optional categoria filter). */
+app.get('/sales', requireAdmin, async (c) => {
+  const fecha = c.req.query('fecha')
+  if (!fecha) return c.json({ error: 'fecha required' }, 400)
+
+  const categoria = c.req.query('categoria')
+  if (categoria && !isProductCategoria(categoria)) {
+    return c.json({ error: 'categoria invalid' }, 400)
+  }
+
+  const result = categoria
+    ? await pool.query<SaleRow>(
+        `SELECT ${SALE_SELECT}
+         FROM sales s
+         JOIN products p ON p.id = s.product_id
+         WHERE s.fecha = $1::date AND p.categoria = $2
+         ORDER BY s.created_at DESC`,
+        [fecha, categoria],
+      )
+    : await pool.query<SaleRow>(
+        `SELECT ${SALE_SELECT}
+         FROM sales s
+         JOIN products p ON p.id = s.product_id
+         WHERE s.fecha = $1::date
+         ORDER BY s.created_at DESC`,
+        [fecha],
+      )
+
+  return c.json(result.rows.map(mapSale))
+})
+
+/** Admin: sales linked to a class session (optional; for Cobro metrics). */
+app.get('/sessions/:fecha/:classId/sales', requireAdmin, async (c) => {
+  const fecha = param(c, 'fecha')
+  const classId = param(c, 'classId')
+  const sessionId = await ensureSession(classId, fecha)
+
+  const result = await pool.query<SaleRow>(
+    `SELECT ${SALE_SELECT}
+     FROM sales s
+     JOIN products p ON p.id = s.product_id
+     WHERE s.session_id = $1
+     ORDER BY s.created_at DESC`,
+    [sessionId],
+  )
+  return c.json({
+    sessionId,
+    sales: result.rows.map(mapSale),
+  })
+})
+
+app.post('/sales', requireAdmin, async (c) => {
+  const body = await c.req.json<{
+    productId: string
+    nombre: string
+    monto: number
+    metodoPago: string
+    fecha: string
+    classId?: string | null
+  }>()
+
+  const nombre = body.nombre?.trim() ?? ''
+  if (!nombre) return c.json({ error: 'Nombre required' }, 400)
+  if (!body.productId) return c.json({ error: 'productId required' }, 400)
+  if (!body.fecha) return c.json({ error: 'fecha required' }, 400)
+  if (typeof body.monto !== 'number' || Number.isNaN(body.monto) || body.monto < 0) {
+    return c.json({ error: 'monto invalid' }, 400)
+  }
+  if (!isMetodoPagoVenta(body.metodoPago)) {
+    return c.json({ error: 'metodoPago invalid' }, 400)
+  }
+
+  const product = await pool.query<ProductRow>(
+    `SELECT id, nombre, precio_default, categoria, activo
+     FROM products WHERE id = $1 AND activo = true`,
+    [body.productId],
+  )
+  if (!product.rows[0]) return c.json({ error: 'Product not found' }, 404)
+
+  let sessionId: string | null = null
+  if (body.classId) {
+    sessionId = await ensureSession(body.classId, body.fecha)
+  }
+
+  const result = await pool.query<SaleRow>(
+    `WITH inserted AS (
+       INSERT INTO sales (product_id, nombre, monto, metodo_pago, fecha, session_id)
+       VALUES ($1, $2, $3, $4, $5::date, $6)
+       RETURNING id, product_id, nombre, monto, metodo_pago, fecha, session_id, created_at
+     )
+     SELECT ${SALE_SELECT}
+     FROM inserted s
+     JOIN products p ON p.id = s.product_id`,
+    [
+      body.productId,
+      nombre,
+      body.monto,
+      body.metodoPago,
+      body.fecha,
+      sessionId,
+    ],
+  )
+
+  return c.json(mapSale(result.rows[0]), 201)
+})
+
+app.delete('/sales/:id', requireAdmin, async (c) => {
+  const result = await pool.query<{ id: string }>(
+    `DELETE FROM sales WHERE id = $1 RETURNING id`,
+    [param(c, 'id')],
+  )
+  if (!result.rows[0]) return c.json({ error: 'Not found' }, 404)
+  return c.json({ ok: true })
 })
 
 app.onError((err, c) => {
